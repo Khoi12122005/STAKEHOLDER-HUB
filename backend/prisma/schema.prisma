@@ -1,0 +1,180 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  BA
+  STAKEHOLDER
+  DEVELOPER
+  TESTER
+}
+
+enum MeetingStatus {
+  SCHEDULED
+  COMPLETED
+  CANCELLED
+}
+
+enum TaskStatus {
+  TODO
+  DOING
+  DONE
+}
+
+enum NotificationType {
+  MEETING
+  TASK
+  SYSTEM
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  LOGIN
+  EXPORT
+}
+
+model User {
+  id                   Int                  @id @default(autoincrement())
+  name                 String               @db.VarChar(120)
+  email                String               @unique @db.VarChar(191)
+  passwordHash         String               @map("password_hash") @db.VarChar(255)
+  role                 Role                 @default(STAKEHOLDER)
+  isActive             Boolean              @default(true) @map("is_active")
+  createdAt            DateTime             @default(now()) @map("created_at")
+  updatedAt            DateTime             @updatedAt @map("updated_at")
+
+  createdMeetings      Meeting[]            @relation("MeetingCreatedBy")
+  meetingParticipants  MeetingParticipant[]
+  assignedTasks        Task[]               @relation("TaskAssignee")
+  createdTasks         Task[]               @relation("TaskCreatedBy")
+  notifications        Notification[]
+  auditLogs            AuditLog[]           @relation("AuditActor")
+
+  @@map("users")
+}
+
+model Meeting {
+  id             Int                  @id @default(autoincrement())
+  title          String               @db.VarChar(180)
+  description    String?              @db.Text
+  location       String?              @db.VarChar(180)
+  meetingUrl     String?              @map("meeting_url") @db.VarChar(255)
+  startTime      DateTime             @map("start_time")
+  endTime        DateTime             @map("end_time")
+  status         MeetingStatus        @default(SCHEDULED)
+  createdById    Int                  @map("created_by_id")
+  createdAt      DateTime             @default(now()) @map("created_at")
+  updatedAt      DateTime             @updatedAt @map("updated_at")
+
+  createdBy      User                 @relation("MeetingCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  participants   MeetingParticipant[]
+  minutes        MeetingMinute?
+  tasks          Task[]
+  notifications  Notification[]
+
+  @@index([createdById])
+  @@index([startTime])
+  @@index([status])
+  @@map("meetings")
+}
+
+model MeetingParticipant {
+  id          Int      @id @default(autoincrement())
+  meetingId   Int      @map("meeting_id")
+  userId      Int      @map("user_id")
+  joinedAt    DateTime @default(now()) @map("joined_at")
+
+  meeting     Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([meetingId, userId])
+  @@index([userId])
+  @@map("meeting_participants")
+}
+
+model MeetingMinute {
+  id          Int      @id @default(autoincrement())
+  meetingId   Int      @unique @map("meeting_id")
+  objective   String   @db.Text
+  discussion  String   @db.Text
+  decision    String   @db.Text
+  rawNotes    String?  @map("raw_notes") @db.LongText
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  meeting     Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+
+  @@map("meeting_minutes")
+}
+
+model Task {
+  id             Int          @id @default(autoincrement())
+  title          String       @db.VarChar(220)
+  description    String?      @db.Text
+  status         TaskStatus   @default(TODO)
+  dueDate        DateTime?    @map("due_date")
+  meetingId      Int?         @map("meeting_id")
+  assigneeId     Int?         @map("assignee_id")
+  createdById    Int          @map("created_by_id")
+  createdAt      DateTime     @default(now()) @map("created_at")
+  updatedAt      DateTime     @updatedAt @map("updated_at")
+
+  meeting        Meeting?     @relation(fields: [meetingId], references: [id], onDelete: SetNull)
+  assignee       User?        @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  createdBy      User         @relation("TaskCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  notifications  Notification[]
+
+  @@index([status])
+  @@index([meetingId])
+  @@index([assigneeId])
+  @@index([createdById])
+  @@map("tasks")
+}
+
+model Notification {
+  id          Int              @id @default(autoincrement())
+  userId      Int              @map("user_id")
+  meetingId   Int?             @map("meeting_id")
+  taskId      Int?             @map("task_id")
+  type        NotificationType @default(SYSTEM)
+  title       String           @db.VarChar(180)
+  message     String           @db.Text
+  isRead      Boolean          @default(false) @map("is_read")
+  createdAt   DateTime         @default(now()) @map("created_at")
+
+  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  meeting     Meeting?         @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  task        Task?            @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead])
+  @@index([meetingId])
+  @@index([taskId])
+  @@map("notifications")
+}
+
+model AuditLog {
+  id          Int         @id @default(autoincrement())
+  actorId     Int?        @map("actor_id")
+  action      AuditAction
+  entityName  String      @map("entity_name") @db.VarChar(100)
+  entityId    Int?        @map("entity_id")
+  beforeData  Json?       @map("before_data")
+  afterData   Json?       @map("after_data")
+  ipAddress   String?     @map("ip_address") @db.VarChar(45)
+  userAgent   String?     @map("user_agent") @db.VarChar(255)
+  createdAt   DateTime    @default(now()) @map("created_at")
+
+  actor       User?       @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([actorId])
+  @@index([entityName, entityId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
