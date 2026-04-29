@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # STAKEHOLDER-HUB (SCMH)
 
 Stakeholder Hub is a comprehensive project management and meeting minute system with real-time notification capabilities.
@@ -73,3 +74,6 @@ Stakeholder Hub is a comprehensive project management and meeting minute system 
 
 ## 📄 License
 [MIT License](LICENSE)
+=======
+# STAKEHOLDER-HUB
+>>>>>>> 45d79b193489e77319b66aa188fca29d950fcbde
